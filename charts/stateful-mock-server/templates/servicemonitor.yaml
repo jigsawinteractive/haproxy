@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name:  {{ include "stateful-mock-chart.fullname" . }}
+  namespace: monitoring
+  labels:
+    {{- include "stateful-mock-chart.labels" . | nindent 4 }}
+spec:
+  endpoints:
+    - port: http
+      interval: 10s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "stateful-mock-chart.selectorLabels" . | nindent 6 }}
