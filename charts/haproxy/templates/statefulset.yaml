@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "fullname" . }}
+  labels:
+{{ include "labels" . | indent 4 }}
+spec:
+  serviceName: {{ include "fullname" . }}-headless
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if .Values.serviceAccounts.create }}
+      serviceAccountName: {{ include "fullname" . }}
+      {{- end }}
+      shareProcessNamespace: true
+      initContainers:
+        - name: confd-firstpass
+          image: "{{ .Values.imageConfd.repository }}:{{ tpl .Values.imageConfd.tag . }}"
+          imagePullPolicy: {{ .Values.imageConfd.pullPolicy }}
+          command: [ "/usr/local/bin/confd", "-log-level", "{{ .Values.config.confd.loglevel }}", "-onetime", "-backend", "file", "-config-file", "/etc/confd/conf.d/confd.toml" ]
+          volumeMounts:
+          - name: confd-conf-volume
+            mountPath: /etc/confd/conf.d
+          - name: confd-templates-volume
+            mountPath: /etc/confd/templates
+          - name: haproxy-conf-volume
+            mountPath: /etc/haproxy
+      containers:
+        - name: confd
+          image: "{{ .Values.imageConfd.repository }}:{{ tpl .Values.imageConfd.tag . }}"
+          imagePullPolicy: {{ .Values.imageConfd.pullPolicy }}
+          command: [ "/usr/local/bin/confd", "-log-level", "{{ .Values.config.confd.loglevel }}", "-interval", "{{ .Values.config.confd.interval }}", "-backend", "file", "-config-file", "/etc/confd/conf.d/confd.toml" ]
+          securityContext:
+            capabilities:
+              add:
+              - SYS_PTRACE
+          volumeMounts:
+          - name: confd-conf-volume
+            mountPath: /etc/confd/conf.d
+          - name: confd-templates-volume
+            mountPath: /etc/confd/templates
+          - name: haproxy-conf-volume
+            mountPath: /etc/haproxy
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ tpl .Values.image.tag . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["haproxy", "-f", "/etc/haproxy/haproxy.conf"]
+          ports:
+            - name: http-in
+              containerPort: 8080
+              protocol: TCP
+            - name: https-in
+              containerPort: 8433
+              protocol: TCP
+            - name: stats
+              containerPort: 32600
+              protocol: TCP
+          volumeMounts:
+            - name: confd-conf-volume
+              mountPath: /etc/confd/conf.d
+            - name: confd-templates-volume
+              mountPath: /etc/confd/templates
+            - name: haproxy-conf-volume
+              mountPath: /etc/haproxy
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: confd-conf-volume
+          configMap:
+            name: {{ include "fullname" . }}-confd
+        - name: confd-templates-volume
+          configMap:
+            name: {{ include "fullname" . }}-template
+        - name: haproxy-conf-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: "2M"
+      dnsConfig:
+        options:
+          - name: ndots
+            value: {{ .Values.dns.ndots | default "2" | quote }}
+          {{ if .Values.dns.singleRequest }}
+          - name: single-request
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

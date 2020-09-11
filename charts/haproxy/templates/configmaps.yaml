@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fullname" . }}-confd
+  labels:
+{{ include "labels" . | indent 4 }}
+data:
+  confd.toml: |-
+    {{- tpl (.Files.Get "configs/confd.tpl") . | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fullname" . }}-template
+  labels:
+{{ include "labels" . | indent 4 }}
+data:
+  haproxy.conf.tmpl: |-
+    {{- tpl (.Files.Get "configs/template.tpl") . | nindent 4 }}

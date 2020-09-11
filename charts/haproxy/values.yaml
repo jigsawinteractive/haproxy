@@ -1,0 +1,86 @@
+image:
+  repository: docker.pkg.github.com/jigsawinteractive/haproxy/haproxy
+  tag: 2.2.2
+  pullPolicy: IfNotPresent
+
+imageConfd:
+  repository: docker.pkg.github.com/jigsawinteractive/haproxy/confd
+  tag: haproxy-2.2.2
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: haproxy
+
+service:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: <CERT ARN>
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "3600"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+
+  headless: false
+
+  type: LoadBalancer
+  loadBalancerIP: ""
+
+  externalTrafficPolicy: Local
+
+  ports:
+    http: 80
+    https: 443
+
+  targetPorts:
+    http: http-in
+    https: https-in
+
+  nodePorts:
+    http: ""
+    https: ""
+
+dns:
+  ndots: 2
+  singleRequest: true
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+config:
+  confd:
+    loglevel: info
+    interval: 10
+  haproxy:
+    nbthread: 2
+    cpuMap: auto:1/1-2 0-1
+    maxReloads: 20
+    debug: false # will hide all http logs
+  mock:
+    enabled: true
+    address: mock.example.com
+    name: mock
+    namespace: default
+
+nodeSelector: {}
+
+serviceAccounts:
+  create: false
+
+tolerations: []
+
+affinity: {}
+
+ingress:
+	enabled: true
+	annotations:
+		kubernetes.io/ingress.class: nginx-internal
+  hosts:
+  - host: haproxy-stats.example.com
+    paths:
+      - "/"
